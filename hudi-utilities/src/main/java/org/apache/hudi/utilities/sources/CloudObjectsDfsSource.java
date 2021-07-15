@@ -16,14 +16,15 @@
  * limitations under the License.
  */
 
-package com.infinilake.sources;
+package org.apache.hudi.utilities.sources;
 
-import com.infinilake.sources.helper.CloudObjectsDfsSelector;
+
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.RowSource;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsDfsSelector;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -46,7 +47,7 @@ public class CloudObjectsDfsSource extends RowSource {
     public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
 
         Pair<Option<String>, String> selectPathsWithLatestSQSMessage =
-                pathSelector.getNextFilePathsFromQueue(lastCkptStr, sourceLimit);
+                pathSelector.getNextFilePathsFromQueue(sparkContext, lastCkptStr, sourceLimit);
         return selectPathsWithLatestSQSMessage.getLeft()
                 .map(pathStr -> Pair.of(Option.of(fromFiles(pathStr)), selectPathsWithLatestSQSMessage.getRight()))
                 .orElseGet(() -> Pair.of(Option.empty(), selectPathsWithLatestSQSMessage.getRight()));
