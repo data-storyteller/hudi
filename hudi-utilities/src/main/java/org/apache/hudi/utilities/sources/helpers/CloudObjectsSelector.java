@@ -209,13 +209,32 @@ public class CloudObjectsSelector {
 
   /** Configs supported. */
   public static class Config {
+    /** {@value #QUEUE_URL_PROP} is the queue url for cloud object events. */
     public static final String QUEUE_URL_PROP = "hoodie.deltastreamer.source.queue.url";
+
+    /**
+     * {@value #QUEUE_LONGPOLLWAIT_PROP} is the long poll wait time in seconds If set as 0 then
+     * client will fetch on short poll basis.
+     */
     public static final String QUEUE_LONGPOLLWAIT_PROP =
         "hoodie.deltastreamer.source.queue.long_poll_wait";
+
+    /**
+     * {@value #QUEUE_MAXMESSAGESEACHBATCH_PROP} is max messages for each batch of delta streamer
+     * run. Source will process these maximum number of message at a time.
+     */
     public static final String QUEUE_MAXMESSAGESEACHBATCH_PROP =
         "hoodie.deltastreamer.source.queue.max_messages_each_batch";
+
+    /**
+     * {@value #QUEUE_VISIBILITYTIMEOUT_PROP} is visibility timeout for messages in queue. After we
+     * consume the message, queue will move the consumed messages to in-flight state, these messages
+     * can't be consumed again by source for this timeout period.
+     */
     public static final String QUEUE_VISIBILITYTIMEOUT_PROP =
         "hoodie.deltastreamer.source.queue.visibility_timeout_seconds";
+
+    /** {@value #SOURCE_INPUT_SELECTOR} source input selector. */
     public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
   }
 }
