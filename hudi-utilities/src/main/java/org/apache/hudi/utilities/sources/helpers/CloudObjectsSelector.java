@@ -45,7 +45,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.json.JSONObject;
 
-/** Cloud Objects Selector Class. This class has methods for processing cloud objects. */
+/**
+ * Cloud Objects Selector Class. This class has methods for processing cloud objects. It currently
+ * supports only AWS S3 objects and AWS SQS queue.
+ */
 public class CloudObjectsSelector {
   public static final List<String> ALLOWED_S3_EVENT_PREFIX =
       Collections.singletonList("ObjectCreated");
@@ -64,17 +67,36 @@ public class CloudObjectsSelector {
         props, Collections.singletonList(CloudObjectsSelector.Config.QUEUE_URL_PROP));
     this.props = props;
     this.queueUrl = props.getString(CloudObjectsSelector.Config.QUEUE_URL_PROP);
-    this.longPollWait =
-        (int) props.getOrDefault(CloudObjectsSelector.Config.QUEUE_LONGPOLLWAIT_PROP, 20);
+    this.longPollWait = props.getInteger(CloudObjectsSelector.Config.QUEUE_LONGPOLLWAIT_PROP, 20);
     this.maxMessageEachBatch =
-        (int) props.getOrDefault(CloudObjectsSelector.Config.QUEUE_MAXMESSAGESEACHBATCH_PROP, 5);
+        props.getInteger(CloudObjectsSelector.Config.QUEUE_MAXMESSAGESEACHBATCH_PROP, 5);
     this.visibilityTimeout =
-        (int) props.getOrDefault(CloudObjectsSelector.Config.QUEUE_VISIBILITYTIMEOUT_PROP, 30);
+        props.getInteger(CloudObjectsSelector.Config.QUEUE_VISIBILITYTIMEOUT_PROP, 30);
     this.maxMessagesEachRequest = 10;
   }
 
-  /** Get the file attributes filePath, eventTime and size from JSONObject record. */
-  public static Map<String, Object> getFileAttributesFromRecord(JSONObject record)
+  /**
+   * Get SQS queue attributes.
+   *
+   * @param sqsClient AWSClient for sqsClient
+   * @param queueUrl queue full url
+   * @return map of attributes needed
+   */
+  protected Map<String, String> getSqsQueueAttributes(AmazonSQS sqsClient, String queueUrl) {
+    GetQueueAttributesResult queueAttributesResult =
+        sqsClient.getQueueAttributes(
+            new GetQueueAttributesRequest(queueUrl)
+                .withAttributeNames("ApproximateNumberOfMessages"));
+    return queueAttributesResult.getAttributes();
+  }
+
+  /**
+   * Get the file attributes filePath, eventTime and size from JSONObject record.
+   *
+   * @param record of object event
+   * @return map of file attribute
+   */
+  protected Map<String, Object> getFileAttributesFromRecord(JSONObject record)
       throws UnsupportedEncodingException {
 
     Map<String, Object> fileRecord = new HashMap<>();
@@ -96,23 +118,14 @@ public class CloudObjectsSelector {
   }
 
   /** Amazon SQS Client Builder. */
-  public static AmazonSQS createAmazonSqsClient() {
+  protected AmazonSQS createAmazonSqsClient() {
     // ToDO - Update it for handling AWS Client creation but not using default only.
     return AmazonSQSClientBuilder.defaultClient();
   }
 
-  /** Get SQS queue attributes. */
-  public static Map<String, String> getSqsQueueAttributes(AmazonSQS sqs, String queueUrl) {
-    GetQueueAttributesResult queueAttributesResult =
-        sqs.getQueueAttributes(
-            new GetQueueAttributesRequest(queueUrl)
-                .withAttributeNames("ApproximateNumberOfMessages"));
-    return queueAttributesResult.getAttributes();
-  }
-
   /** List messages from queue. */
-  public static List<Message> getMessagesToProcess(
-      AmazonSQS sqs,
+  protected List<Message> getMessagesToProcess(
+      AmazonSQS sqsClient,
       String queueUrl,
       ReceiveMessageRequest receiveMessageRequest,
       int maxMessageEachBatch,
@@ -120,15 +133,15 @@ public class CloudObjectsSelector {
     List<Message> messagesToProcess = new ArrayList<>();
 
     // Get count for available messages
-    Map<String, String> queueAttributesResult = getSqsQueueAttributes(sqs, queueUrl);
+    Map<String, String> queueAttributesResult = getSqsQueueAttributes(sqsClient, queueUrl);
     long approxMessagesAvailable =
         Long.parseLong(queueAttributesResult.get("ApproximateNumberOfMessages"));
     log.info("Approx. " + approxMessagesAvailable + " messages available in queue.");
 
     for (int i = 0;
-        i < (int) Math.ceil((double) approxMessagesAvailable / maxMessagesEachRequest) + 1;
+        i < (int) Math.ceil((double) approxMessagesAvailable / maxMessagesEachRequest);
         ++i) {
-      List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
+      List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).getMessages();
       log.debug("Messages size: " + messages.size());
 
       for (Message message : messages) {
@@ -143,8 +156,11 @@ public class CloudObjectsSelector {
     return messagesToProcess;
   }
 
-  /** create partitions of list using specific batch size. */
-  public List<List<Message>> createListPartitions(List<Message> singleList, int eachBatchSize) {
+  /**
+   * create partitions of list using specific batch size. we can't use third party API for this
+   * functionality, due to https://github.com/apache/hudi/blob/master/style/checkstyle.xml#L270
+   */
+  protected List<List<Message>> createListPartitions(List<Message> singleList, int eachBatchSize) {
     List<List<Message>> listPartitions = new ArrayList<>();
 
     if (singleList.size() == 0 || eachBatchSize < 1) {
@@ -164,7 +180,7 @@ public class CloudObjectsSelector {
   }
 
   /** delete batch of messages from queue. */
-  public void deleteBatchOfMessages(
+  protected void deleteBatchOfMessages(
       AmazonSQS sqs, String queueUrl, List<Message> messagesToBeDeleted) {
     DeleteMessageBatchRequest deleteBatchReq =
         new DeleteMessageBatchRequest().withQueueUrl(queueUrl);
@@ -199,6 +215,7 @@ public class CloudObjectsSelector {
       AmazonSQS sqs, String queueUrl, List<Message> processedMessages) {
 
     if (!processedMessages.isEmpty()) {
+
       // create batch for deletion, SES DeleteMessageBatchRequest only accept max 10 entries
       List<List<Message>> deleteBatches = createListPartitions(processedMessages, 10);
       for (List<Message> deleteBatch : deleteBatches) {
@@ -217,14 +234,14 @@ public class CloudObjectsSelector {
      * client will fetch on short poll basis.
      */
     public static final String QUEUE_LONGPOLLWAIT_PROP =
-        "hoodie.deltastreamer.source.queue.long_poll_wait";
+        "hoodie.deltastreamer.source.queue.longpoll.wait";
 
     /**
      * {@value #QUEUE_MAXMESSAGESEACHBATCH_PROP} is max messages for each batch of delta streamer
      * run. Source will process these maximum number of message at a time.
      */
     public static final String QUEUE_MAXMESSAGESEACHBATCH_PROP =
-        "hoodie.deltastreamer.source.queue.max_messages_each_batch";
+        "hoodie.deltastreamer.source.queue.max.messages.eachbatch";
 
     /**
      * {@value #QUEUE_VISIBILITYTIMEOUT_PROP} is visibility timeout for messages in queue. After we
@@ -232,7 +249,7 @@ public class CloudObjectsSelector {
      * can't be consumed again by source for this timeout period.
      */
     public static final String QUEUE_VISIBILITYTIMEOUT_PROP =
-        "hoodie.deltastreamer.source.queue.visibility_timeout_seconds";
+        "hoodie.deltastreamer.source.queue.visibility.timeout";
 
     /** {@value #SOURCE_INPUT_SELECTOR} source input selector. */
     public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";

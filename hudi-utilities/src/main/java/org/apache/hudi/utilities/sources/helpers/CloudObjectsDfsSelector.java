@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -131,7 +130,13 @@ public class CloudObjectsDfsSelector extends CloudObjectsSelector {
     }
   }
 
-  /** List messages from queue, filter out illegible files while doing so. */
+  /**
+   * List messages from queue, filter out illegible files while doing so. It will also delete the
+   * ineligible messages from queue.
+   *
+   * @param processedMessages array of processed messages to add more messages
+   * @return the list of eligible file records
+   */
   protected List<Map<String, Object>> getEligibleFilePathRecords(List<Message> processedMessages)
       throws IOException {
 
@@ -157,34 +162,44 @@ public class CloudObjectsDfsSelector extends CloudObjectsSelector {
       boolean isMessageDelete = Boolean.TRUE;
 
       JSONObject messageBody = new JSONObject(message.getBody());
+      Map<String, Object> messageMap;
+      ObjectMapper mapper = new ObjectMapper();
       if (messageBody.has("Message")) {
-        ObjectMapper objectMapper = new ObjectMapper();
-        String messageBodyString =
-            objectMapper.readValue(messageBody.getString("Message"), String.class);
-        messageBody = new JSONObject(messageBodyString);
+        // If this messages is from S3Event -> SNS -> SQS
+        messageMap =
+            (Map<String, Object>) mapper.readValue(messageBody.getString("Message"), Map.class);
+      } else {
+        // If this messages is from S3Event -> SQS
+        messageMap = (Map<String, Object>) mapper.readValue(messageBody.toString(), Map.class);
       }
-      if (messageBody.has("Records")) {
-        JSONArray records = messageBody.getJSONArray("Records");
-        for (int j = 0; j < records.length(); ++j) {
-          JSONObject record = records.getJSONObject(j);
-          String eventName = record.getString("eventName");
 
-          Map<String, Object> fileRecord = getFileAttributesFromRecord(record);
+      if (messageMap.containsKey("Records")) {
+        List<Map<String, Object>> records = (List<Map<String, Object>>) messageMap.get("Records");
+        for (Map<String, Object> record : records) {
+          String eventName = (String) record.get("eventName");
+          if (ALLOWED_S3_EVENT_PREFIX.stream().anyMatch(eventName::startsWith)) {
 
-          long eventTime = (long) fileRecord.get("eventTime");
-          String filePath = (String) fileRecord.get("filePath");
-          String fileName = filePath.substring(filePath.lastIndexOf("/") + 1);
+            Map<String, Object> fileRecord = getFileAttributesFromRecord(new JSONObject(record));
 
-          // skip the files with unwanted file name prefix
-          if (IGNORE_FILEPREFIX_LIST.stream().noneMatch(fileName::startsWith)) {
-            eligibleFilePathRecords.add(fileRecord);
-            isMessageDelete = Boolean.FALSE;
-            processedMessages.add(message);
+            String filePath = (String) fileRecord.get("filePath");
+            String fileName = filePath.substring(filePath.lastIndexOf("/") + 1);
+
+            // skip the files with unwanted file name prefix
+            if (IGNORE_FILEPREFIX_LIST.stream().noneMatch(fileName::startsWith)) {
+              eligibleFilePathRecords.add(fileRecord);
+              isMessageDelete = Boolean.FALSE;
+              processedMessages.add(message);
+            } else {
+              log.info("Ignoring the record as file prefix is not expected.");
+            }
+          } else {
+            log.info("Record is not allowed s3 event");
           }
         }
       } else {
         log.info("Message is not expected format or it's s3:TestEvent");
       }
+
       if (isMessageDelete) {
         ineligibleMessages.add(message);
       }

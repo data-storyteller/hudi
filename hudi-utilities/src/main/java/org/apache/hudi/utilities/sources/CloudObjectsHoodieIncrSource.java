@@ -26,7 +26,6 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.log4j.LogManager;
@@ -41,7 +40,7 @@ import org.apache.spark.sql.SparkSession;
  * Cloud Objects Hoodie Incr Source Class. {@link CloudObjectsHoodieIncrSource}.This source will use
  * the cloud files meta information form cloud meta hoodie table generate by CloudObjectsMetaSource.
  */
-public class CloudObjectsHoodieIncrSource extends RowSource {
+public class CloudObjectsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LogManager.getLogger(CloudObjectsHoodieIncrSource.class);
 
@@ -53,7 +52,6 @@ public class CloudObjectsHoodieIncrSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
-  @SuppressWarnings("checkstyle:WhitespaceAfter")
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(
       Option<String> lastCkptStr, long sourceLimit) {
@@ -101,7 +99,11 @@ public class CloudObjectsHoodieIncrSource extends RowSource {
 
     // Extract distinct file keys from cloud meta hoodie table
     final List<Row> cloudMetaDf =
-        source.filter("s3.object.size > 0").select("s3.bucket.name", "s3.object.key").distinct().collectAsList();
+        source
+            .filter("s3.object.size > 0")
+            .select("s3.bucket.name", "s3.object.key")
+            .distinct()
+            .collectAsList();
 
     // Create S3 paths
     List<String> cloudFiles = new ArrayList<>();
@@ -113,55 +115,11 @@ public class CloudObjectsHoodieIncrSource extends RowSource {
     }
     String pathStr = String.join(",", cloudFiles);
 
-    // log.info("Final Schema from Source is :" + src.schema());
     return Pair.of(Option.of(fromFiles(pathStr)), instantEndpts.getRight());
   }
 
-  /** Function to create Dataset from files. */
+  /** Function to create Dataset from parquet files. */
   private Dataset<Row> fromFiles(String pathStr) {
     return sparkSession.read().parquet(pathStr.split(","));
-  }
-
-  /** Config Class. {@link Config} */
-  protected static class Config {
-
-    /** {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table. */
-    private static final String HOODIE_SRC_BASE_PATH =
-        "hoodie.deltastreamer.source.hoodieincr.path";
-
-    /**
-     * {@value #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be
-     * incrementally fetched.
-     */
-    private static final String NUM_INSTANTS_PER_FETCH =
-        "hoodie.deltastreamer.source.hoodieincr.num_instants";
-
-    private static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = 1;
-
-    /**
-     * {@value #HOODIE_SRC_PARTITION_FIELDS} specifies partition fields that needs to be added to
-     * source table after parsing _hoodie_partition_path.
-     */
-    private static final String HOODIE_SRC_PARTITION_FIELDS =
-        "hoodie.deltastreamer.source.hoodieincr.partition.fields";
-
-    /**
-     * {@value #HOODIE_SRC_PARTITION_EXTRACTORCLASS} PartitionValueExtractor class to extract
-     * partition fields from _hoodie_partition_path.
-     */
-    private static final String HOODIE_SRC_PARTITION_EXTRACTORCLASS =
-        "hoodie.deltastreamer.source.hoodieincr.partition.extractor.class";
-
-    private static final String DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS =
-        SlashEncodedDayPartitionValueExtractor.class.getCanonicalName();
-
-    /**
-     * {@value #READ_LATEST_INSTANT_ON_MISSING_CKPT} allows delta-streamer to incrementally fetch
-     * from latest committed instant when checkpoint is not provided.
-     */
-    private static final String READ_LATEST_INSTANT_ON_MISSING_CKPT =
-        "hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt";
-
-    private static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT = true;
   }
 }

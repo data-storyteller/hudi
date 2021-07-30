@@ -28,7 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.hadoop.conf.Configuration;
@@ -49,7 +48,6 @@ import org.json.JSONObject;
 public class CloudObjectsMetaSelector extends CloudObjectsSelector {
 
   public AmazonSQS sqs = createAmazonSqsClient();
-  //  public List<Message> processedMessages = new ArrayList<>();
 
   /** Cloud Objects Meta Selector Class. {@link CloudObjectsSelector} */
   public CloudObjectsMetaSelector(TypedProperties props, Configuration hadoopConf) {
@@ -82,7 +80,13 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
     }
   }
 
-  /** List messages from queue, filter out illegible events while doing so. */
+  /**
+   * List messages from queue, filter out illegible events while doing so. It will also delete the
+   * ineligible messages from queue.
+   *
+   * @param processedMessages array of processed messages to add more messages
+   * @return the list of eligible records
+   */
   protected List<Map<String, Object>> getEligibleEvents(List<Message> processedMessages)
       throws IOException {
 
@@ -105,14 +109,19 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
             this.maxMessagesEachRequest);
 
     for (Message message : messages) {
-
       boolean isMessageDelete = Boolean.TRUE;
 
       JSONObject messageBody = new JSONObject(message.getBody());
-      Map messageMap = new HashMap<>();
+      Map<String, Object> messageMap;
+      ObjectMapper mapper = new ObjectMapper();
+
       if (messageBody.has("Message")) {
-        ObjectMapper mapper = new ObjectMapper();
-        messageMap = mapper.readValue(messageBody.getString("Message"), Map.class);
+        // If this messages is from S3Event -> SNS -> SQS
+        messageMap =
+            (Map<String, Object>) mapper.readValue(messageBody.getString("Message"), Map.class);
+      } else {
+        // If this messages is from S3Event -> SQS
+        messageMap = (Map<String, Object>) mapper.readValue(messageBody.toString(), Map.class);
       }
       if (messageMap.containsKey("Records")) {
         List<Map<String, Object>> records = (List<Map<String, Object>>) messageMap.get("Records");
@@ -158,7 +167,6 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
     processedMessages.clear();
 
     log.info("Reading messages....");
-    System.out.println("Reading messages....");
 
     try {
       log.info("Start Checkpoint : " + lastCheckpointStr);
@@ -190,6 +198,7 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
 
         // Currently HUDI don't supports column names like request-amz-id-2
         eventRecord.remove("responseElements");
+
         filteredEventRecords.add(
             new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "="));
       }

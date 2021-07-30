@@ -402,13 +402,14 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-sqs</artifactId>
       <version>1.12.22</version>
     </dependency>
-
+    
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
@@ -465,27 +466,5 @@
       <artifactId>junit-platform-commons</artifactId>
       <scope>test</scope>
     </dependency>
-      <dependency>
-          <groupId>org.apache.spark</groupId>
-          <artifactId>spark-sql_2.12</artifactId>
-          <version>3.0.0</version>
-          <scope>compile</scope>
-      </dependency>
-      <dependency>
-          <groupId>com.google.code.gson</groupId>
-          <artifactId>gson</artifactId>
-          <scope>compile</scope>
-      </dependency>
-    <dependency>
-      <groupId>com.google.code.gson</groupId>
-      <artifactId>gson</artifactId>
-      <scope>compile</scope>
-    </dependency>
-      <dependency>
-          <groupId>com.google.guava</groupId>
-          <artifactId>guava</artifactId>
-          <version>12.0.1</version>
-          <scope>compile</scope>
-      </dependency>
   </dependencies>
 </project>
