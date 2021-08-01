@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,7 @@ public class CloudObjectsMetaSource extends RowSource {
 
   private final CloudObjectsMetaSelector pathSelector;
   private final List<Message> processedMessages = new ArrayList<>();
+  AmazonSQS sqs;
 
   /** Cloud Objects Meta Source Class. */
   public CloudObjectsMetaSource(
@@ -50,9 +52,8 @@ public class CloudObjectsMetaSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector =
-        CloudObjectsMetaSelector.createSourceSelector(
-            props, this.sparkContext.hadoopConfiguration());
+    this.pathSelector = CloudObjectsMetaSelector.createSourceSelector(props);
+    this.sqs = this.pathSelector.createAmazonSqsClient();
   }
 
   @Override
@@ -60,7 +61,7 @@ public class CloudObjectsMetaSource extends RowSource {
       Option<String> lastCkptStr, long sourceLimit) {
 
     Pair<List<String>, String> selectPathsWithLatestSqsMessage =
-        pathSelector.getNextEventsFromQueue(sparkContext, lastCkptStr, processedMessages);
+        pathSelector.getNextEventsFromQueue(sqs, sparkContext, lastCkptStr, processedMessages);
     if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
       return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());
     } else {
@@ -77,8 +78,7 @@ public class CloudObjectsMetaSource extends RowSource {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    pathSelector.onCommitDeleteProcessedMessages(
-        pathSelector.sqs, pathSelector.queueUrl, processedMessages);
+    pathSelector.onCommitDeleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
     processedMessages.clear();
   }
 }

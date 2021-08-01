@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,14 +33,15 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * This source provides capability to create the hoodie table from cloudObject data (eg. s3). It
- * will primary use cloud queue to fetch new object information and update hoodie table with cloud
- * object data.
+ * This source provides capability to create the hoodie table from cloudObject data (eg. s3 events).
+ * It will primary use cloud queue to fetch new object information and update hoodie table with
+ * cloud object data.
  */
 public class CloudObjectsDfsSource extends RowSource {
 
   private final CloudObjectsDfsSelector pathSelector;
   private final List<Message> processedMessages = new ArrayList<>();
+  AmazonSQS sqs;
 
   /** Cloud Objects Dfs Source Class Constructor. */
   public CloudObjectsDfsSource(
@@ -48,9 +50,8 @@ public class CloudObjectsDfsSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector =
-        CloudObjectsDfsSelector.createSourceSelector(
-            props, this.sparkContext.hadoopConfiguration());
+    this.pathSelector = CloudObjectsDfsSelector.createSourceSelector(props);
+    sqs = this.pathSelector.createAmazonSqsClient();
   }
 
   @Override
@@ -58,7 +59,7 @@ public class CloudObjectsDfsSource extends RowSource {
       Option<String> lastCkptStr, long sourceLimit) {
 
     Pair<Option<String>, String> selectPathsWithLatestQueueMessages =
-        pathSelector.getNextFilePathsFromQueue(sparkContext, lastCkptStr, processedMessages);
+        pathSelector.getNextFilePathsFromQueue(sqs, sparkContext, lastCkptStr, processedMessages);
     return selectPathsWithLatestQueueMessages
         .getLeft()
         .map(
@@ -70,13 +71,13 @@ public class CloudObjectsDfsSource extends RowSource {
   }
 
   private Dataset<Row> fromParquetFiles(String pathStr) {
+    System.out.println(pathStr);
     return sparkSession.read().parquet(pathStr.split(","));
   }
 
   @Override
   public void onCommit(String lastCkptStr) {
-    pathSelector.onCommitDeleteProcessedMessages(
-        pathSelector.sqs, pathSelector.queueUrl, processedMessages);
+    pathSelector.onCommitDeleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
     processedMessages.clear();
   }
 }

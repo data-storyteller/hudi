@@ -38,7 +38,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.log4j.LogManager;
@@ -60,13 +59,17 @@ public class CloudObjectsSelector {
   public final int maxMessageEachBatch;
   public final int visibilityTimeout;
   public final TypedProperties props;
+  public final String fsName;
 
   /** Cloud Objects Selector Class. {@link CloudObjectsSelector} */
-  public CloudObjectsSelector(TypedProperties props, Configuration hadoopConf) {
+  public CloudObjectsSelector(TypedProperties props) {
     DataSourceUtils.checkRequiredProperties(
-        props, Collections.singletonList(CloudObjectsSelector.Config.QUEUE_URL_PROP));
+        props, Collections.singletonList(Config.QUEUE_URL_PROP));
+
     this.props = props;
     this.queueUrl = props.getString(CloudObjectsSelector.Config.QUEUE_URL_PROP);
+    this.fsName =
+        props.getString(CloudObjectsSelector.Config.SOURCE_QUEUE_FS_PROP, "s3").toLowerCase();
     this.longPollWait = props.getInteger(CloudObjectsSelector.Config.QUEUE_LONGPOLLWAIT_PROP, 20);
     this.maxMessageEachBatch =
         props.getInteger(CloudObjectsSelector.Config.QUEUE_MAXMESSAGESEACHBATCH_PROP, 5);
@@ -109,7 +112,7 @@ public class CloudObjectsSelector {
         URLDecoder.decode(
             record.getJSONObject("s3").getJSONObject("bucket").getString("name"), "UTF-8");
     String key = URLDecoder.decode(s3Object.getString("key"), "UTF-8");
-    String filePath = "s3://" + bucket + "/" + key;
+    String filePath = this.fsName + "://" + bucket + "/" + key;
 
     fileRecord.put("eventTime", eventTime);
     fileRecord.put("fileSize", s3Object.getLong("size"));
@@ -118,7 +121,7 @@ public class CloudObjectsSelector {
   }
 
   /** Amazon SQS Client Builder. */
-  protected AmazonSQS createAmazonSqsClient() {
+  public AmazonSQS createAmazonSqsClient() {
     // ToDO - Update it for handling AWS Client creation but not using default only.
     return AmazonSQSClientBuilder.defaultClient();
   }
@@ -228,6 +231,9 @@ public class CloudObjectsSelector {
   public static class Config {
     /** {@value #QUEUE_URL_PROP} is the queue url for cloud object events. */
     public static final String QUEUE_URL_PROP = "hoodie.deltastreamer.source.queue.url";
+
+    /** {@value #QUEUE_URL_PROP} is the queue url for cloud object events. */
+    public static final String SOURCE_QUEUE_FS_PROP = "hoodie.deltastreamer.source.queue.fs";
 
     /**
      * {@value #QUEUE_LONGPOLLWAIT_PROP} is the long poll wait time in seconds If set as 0 then

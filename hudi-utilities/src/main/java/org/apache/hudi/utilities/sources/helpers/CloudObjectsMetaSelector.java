@@ -30,7 +30,6 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -47,19 +46,16 @@ import org.json.JSONObject;
  */
 public class CloudObjectsMetaSelector extends CloudObjectsSelector {
 
-  public AmazonSQS sqs = createAmazonSqsClient();
-
   /** Cloud Objects Meta Selector Class. {@link CloudObjectsSelector} */
-  public CloudObjectsMetaSelector(TypedProperties props, Configuration hadoopConf) {
-    super(props, hadoopConf);
+  public CloudObjectsMetaSelector(TypedProperties props) {
+    super(props);
   }
 
   /**
    * Factory method for creating custom CloudObjectsMetaSelector. Default selector to use is {@link
    * CloudObjectsMetaSelector}
    */
-  public static CloudObjectsMetaSelector createSourceSelector(
-      TypedProperties props, Configuration conf) {
+  public static CloudObjectsMetaSelector createSourceSelector(TypedProperties props) {
     String sourceSelectorClass =
         props.getString(
             CloudObjectsMetaSelector.Config.SOURCE_INPUT_SELECTOR,
@@ -68,10 +64,7 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
       CloudObjectsMetaSelector selector =
           (CloudObjectsMetaSelector)
               ReflectionUtils.loadClass(
-                  sourceSelectorClass,
-                  new Class<?>[] {TypedProperties.class, Configuration.class},
-                  props,
-                  conf);
+                  sourceSelectorClass, new Class<?>[] {TypedProperties.class}, props);
 
       log.info("Using path selector " + selector.getClass().getName());
       return selector;
@@ -87,8 +80,8 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
    * @param processedMessages array of processed messages to add more messages
    * @return the list of eligible records
    */
-  protected List<Map<String, Object>> getEligibleEvents(List<Message> processedMessages)
-      throws IOException {
+  protected List<Map<String, Object>> getEligibleEvents(
+      AmazonSQS sqs, List<Message> processedMessages) throws IOException {
 
     List<Map<String, Object>> eligibleRecords = new ArrayList<>();
     List<Message> ineligibleMessages = new ArrayList<>();
@@ -102,7 +95,7 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
 
     List<Message> messages =
         getMessagesToProcess(
-            this.sqs,
+            sqs,
             this.queueUrl,
             receiveMessageRequest,
             this.maxMessageEachBatch,
@@ -160,6 +153,7 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
    * @return the list of events
    */
   public Pair<List<String>, String> getNextEventsFromQueue(
+      AmazonSQS sqs,
       JavaSparkContext sparkContext,
       Option<String> lastCheckpointStr,
       List<Message> processedMessages) {
@@ -173,7 +167,7 @@ public class CloudObjectsMetaSelector extends CloudObjectsSelector {
 
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
 
-      List<Map<String, Object>> eligibleEventRecords = getEligibleEvents(processedMessages);
+      List<Map<String, Object>> eligibleEventRecords = getEligibleEvents(sqs, processedMessages);
       log.info("eligible events size: " + eligibleEventRecords.size());
 
       // sort all events by event time.

@@ -20,13 +20,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,6 +30,7 @@ import java.util.Map;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,10 +41,8 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_URL_PROP;
+import static org.apache.hudi.utilities.testutils.CloudObjectTestUtils.deleteMessagesInQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.when;
 
 public class TestCloudObjectsSelector extends HoodieClientTestHarness {
 
@@ -59,7 +52,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   @Mock AmazonSQS sqs;
 
   @Mock private CloudObjectsSelector cloudObjectsSelector;
-  // TestHoodieDeltastreamer
+
   @BeforeEach
   void setUp() {
     initSparkContexts();
@@ -84,21 +77,15 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
     // ApproximateNumberOfMessages is a required queue attribute for Cloud object selector
 
     CloudObjectsSelector selector =
-        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup the queue attributes
-    doReturn(sqs).when(cloudObjectsSelector).createAmazonSqsClient();
-    when(sqs.receiveMessage(any(ReceiveMessageRequest.class)))
-        .thenReturn(new ReceiveMessageResult());
-    when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
-        .thenReturn(
-            new GetQueueAttributesResult()
-                .addAttributesEntry("ApproximateNumberOfMessages", "fooNumber"));
+    CloudObjectTestUtils.setMessagesInQueue(sqs, null);
 
     // test the return values
     Map<String, String> queueAttributes = selector.getSqsQueueAttributes(sqs, sqsUrl);
     assertEquals(1, queueAttributes.size());
-    assertEquals("fooNumber", queueAttributes.get("ApproximateNumberOfMessages"));
+    assertEquals("0", queueAttributes.get("ApproximateNumberOfMessages"));
   }
 
   @ParameterizedTest
@@ -107,7 +94,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
       throws IOException {
 
     CloudObjectsSelector selector =
-        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup s3 record
     String bucket = "test-bucket";
@@ -151,7 +138,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   public void createListPartitionsReturnsExpectedSetOfBatch(Class<?> clazz) {
 
     CloudObjectsSelector selector =
-        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
@@ -186,7 +173,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   public void createListPartitionsReturnsEmptyIfBatchSizeIsZero(Class<?> clazz) {
 
     CloudObjectsSelector selector =
-        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
@@ -204,7 +191,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   public void onCommitDeleteProcessedMessagesShouldDeleteMessages(Class<?> clazz) {
 
     CloudObjectsSelector selector =
-        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+        (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
@@ -217,8 +204,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
             .addAttributesEntry("MessageId", "2")
             .addAttributesEntry("ReceiptHandle", "1"));
 
-    when(sqs.deleteMessageBatch(any(DeleteMessageBatchRequest.class)))
-        .thenReturn(new DeleteMessageBatchResult());
+    deleteMessagesInQueue(sqs);
 
     //  test the return values
     selector.onCommitDeleteProcessedMessages(sqs, sqsUrl, testSingleList);

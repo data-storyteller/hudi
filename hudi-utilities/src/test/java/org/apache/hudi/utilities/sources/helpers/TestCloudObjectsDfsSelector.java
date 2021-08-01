@@ -20,18 +20,16 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,8 +40,6 @@ import org.mockito.MockitoAnnotations;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_URL_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
 
@@ -78,50 +74,19 @@ public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
     // ApproximateNumberOfMessages is a required queue attribute for Cloud object selector
 
     CloudObjectsDfsSelector selector =
-        (CloudObjectsDfsSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
-
-    selector.sqs = sqs;
+        (CloudObjectsDfsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
 
     // setup s3 record
     String bucket = "test-bucket";
-    String key = "test/year=test1/month=test2/day=test3/part-foo-bar.snappy.parquet";
-    String body =
-        "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"1\",\n  \"TopicArn\" : \"arn:aws:sns:foo:123:"
-            + "foo-bar\",\n  \"Subject\" : \"Amazon S3 Notification\",\n  \"Message\" : \"{\\\"Records\\\":"
-            + "[{\\\"eventVersion\\\":\\\"2.1\\\",\\\"eventSource\\\":\\\"aws:s3\\\",\\\"awsRegion\\\":\\\"us"
-            + "-west-2\\\",\\\"eventTime\\\":\\\"2021-07-27T09:05:36.755Z\\\",\\\"eventName\\\":\\\"ObjectCreated"
-            + ":Copy\\\",\\\"userIdentity\\\":{\\\"principalId\\\":\\\"AWS:test\\\"},\\\"requestParameters\\\":"
-            + "{\\\"sourceIPAddress\\\":\\\"0.0.0.0\\\"},\\\"responseElements\\\":{\\\"x-amz-request-id\\\":\\\""
-            + "test\\\",\\\"x-amz-id-2\\\":\\\"foobar\\\"},\\\"s3\\\":{\\\"s3SchemaVersion\\\":\\\"1.0\\\",\\\""
-            + "configurationId\\\":\\\"foobar\\\",\\\"bucket\\\":{\\\"name\\\":\\\""
-            + bucket
-            + "\\\",\\\"ownerIdentity\\\":{\\\"principalId\\\":\\\"foo\\\"},\\\"arn\\\":\\\"arn:aws:s3:::foo\\\"}"
-            + ",\\\"object\\\":{\\\"key\\\":\\\""
-            + key
-            + "\\\",\\\"size\\\":123,\\\"eTag\\\":\\\"test\\\",\\\"sequencer\\\":\\\"1\\\"}}}]}\"}";
-
-    Message message = new Message();
-    message.setReceiptHandle("1");
-    message.setMessageId("1");
-    message.setBody(body);
-
-    List<Message> messages = new ArrayList<>();
-    messages.add(message);
-
-    ReceiveMessageResult receiveMessageResult = new ReceiveMessageResult();
-    receiveMessageResult.setMessages(messages);
-
-    when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
-        .thenReturn(
-            new GetQueueAttributesResult().addAttributesEntry("ApproximateNumberOfMessages", "1"));
-
-    when(sqs.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(receiveMessageResult);
+    String key = "part-foo-bar.snappy.parquet";
+    Path path = new Path(bucket, key);
+    CloudObjectTestUtils.setMessagesInQueue(sqs, path);
 
     List<Message> processed = new ArrayList<>();
 
     // test the return values
     Pair<Option<String>, String> eventFromQueue =
-        selector.getNextFilePathsFromQueue(jsc, Option.empty(), processed);
+        selector.getNextFilePathsFromQueue(sqs, jsc, Option.empty(), processed);
 
     assertEquals(1, processed.size());
     assertEquals("s3://" + bucket + "/" + key, eventFromQueue.getLeft().get());
