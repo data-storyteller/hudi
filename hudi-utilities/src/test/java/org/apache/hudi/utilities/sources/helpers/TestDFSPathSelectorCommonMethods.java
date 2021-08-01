@@ -27,7 +27,6 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.junit.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -104,7 +103,6 @@ public class TestDFSPathSelectorCommonMethods extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @Test(expected = IndexOutOfBoundsException.class)
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit(Class<?> clazz) throws Exception {
     DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
