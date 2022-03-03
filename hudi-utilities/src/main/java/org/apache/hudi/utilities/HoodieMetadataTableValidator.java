@@ -451,7 +451,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     LOG.debug("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
     validate(allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath, "file slices");
 
-    LOG.info("Validation of all file groups succeeded for partition " + partitionPath);
+    LOG.info("HoodieWriteConfigtion " + partitionPath);
   }
 
   /**
