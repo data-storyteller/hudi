@@ -68,6 +68,12 @@ dag_content:
       delete_input_data: true
     type: ValidateDatasetNode
     deps: first_delete
+  first_hive_sync:
+    config:
+      queue_name: "adhoc"
+      engine: "mr"
+    type: HiveSyncNode
+    deps: second_validate
   first_presto_query:
     config:
       validate_once_every_itr: 3
@@ -79,4 +85,4 @@ dag_content:
         query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
         result2: 0
     type: PrestoQueryNode
-    deps: second_validate
+    deps: first_hive_sync

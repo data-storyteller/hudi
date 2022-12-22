@@ -48,6 +48,12 @@ dag_content:
       max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateDatasetNode
     deps: first_delete
+  first_hive_sync:
+    config:
+      queue_name: "adhoc"
+      engine: "mr"
+    type: HiveSyncNode
+    deps: second_validate
   first_presto_query:
     config:
       execute_itr_count: 6
@@ -59,7 +65,7 @@ dag_content:
         query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
         result2: 0
     type: PrestoQueryNode
-    deps: second_validate
+    deps: first_hive_sync
   last_validate:
     config:
       execute_itr_count: 6

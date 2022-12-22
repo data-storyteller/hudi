@@ -37,6 +37,10 @@ public class HiveSyncNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
+    if (!executionContext.getHoodieTestSuiteWriter().getCfg().enablePrestoValidation) {
+      log.info("Skipping HiveSyncNode if Presto Validation is not enabled.");
+      return;
+    }
     log.info("Executing hive sync node");
     SyncUtilHelpers.runHoodieMetaSync(HiveSyncTool.class.getName(), new TypedProperties(executionContext.getHoodieTestSuiteWriter().getProps()),
         executionContext.getHoodieTestSuiteWriter().getConfiguration(),
