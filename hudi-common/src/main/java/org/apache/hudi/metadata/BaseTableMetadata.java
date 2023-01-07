@@ -161,12 +161,14 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     if (isMetadataTableEnabled) {
       try {
+        LOG.warn("XXXX metadata is enabled.");
         List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
         return fetchAllFilesInPartitionPaths(partitionPaths);
       } catch (Exception e) {
         throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
       }
     }
+    LOG.warn("XXXX non metadata.");
 
     return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath.toString(), metadataConfig.shouldAssumeDatePartitioning())
         .getAllFilesInPartitions(partitions);
