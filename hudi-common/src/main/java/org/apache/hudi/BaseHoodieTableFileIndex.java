@@ -153,8 +153,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
     // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
     if (shouldListLazily) {
+      LOG.warn("XXX Listing lazily");
       this.tableMetadata = createMetadataTable(engineContext, metadataConfig, basePath);
     } else {
+      LOG.warn("XXX Listing EAGERLY");
       doRefresh();
     }
   }
