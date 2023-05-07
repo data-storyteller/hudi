@@ -35,6 +35,9 @@ public class TrinoQueryNode extends BaseQueryNode {
 
   @Override
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
+    if (!context.getHoodieTestSuiteWriter().getCfg().enableTrinoValidation) {
+      return;
+    }
     log.info("Executing trino query node {}", this.getName());
     String url = context.getHoodieTestSuiteWriter().getCfg().trinoJdbcUrl;
     if (StringUtils.isNullOrEmpty(url)) {
