@@ -65,7 +65,7 @@ dag_content:
     config:
       trino_queries:
         query1: "select count(*) from testdb.table1"
-        result1: 3600
+        result1: 189000
         query2: "select count(*) from testdb.table1 group   by `_row_key` having count(*) > 1"
         result2: 0
     type: TrinoQueryNode
