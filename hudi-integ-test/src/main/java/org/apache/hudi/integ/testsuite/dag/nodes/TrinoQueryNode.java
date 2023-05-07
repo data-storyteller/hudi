@@ -38,6 +38,9 @@ public class TrinoQueryNode extends BaseQueryNode {
     if (!context.getHoodieTestSuiteWriter().getCfg().enableTrinoValidation) {
       return;
     }
+    log.info("Starting hive sync for trino query node {}", this.getName());
+    DagNode hiveSyncNode = new HiveSyncNode(DeltaConfig.Config.newBuilder().build());
+    hiveSyncNode.execute(context, curItrCount);
     log.info("Executing trino query node {}", this.getName());
     String url = context.getHoodieTestSuiteWriter().getCfg().trinoJdbcUrl;
     if (StringUtils.isNullOrEmpty(url)) {
