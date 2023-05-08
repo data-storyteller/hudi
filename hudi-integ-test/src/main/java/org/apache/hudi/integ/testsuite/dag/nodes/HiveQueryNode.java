@@ -48,6 +48,9 @@ public class HiveQueryNode extends BaseQueryNode {
 
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
+    if (!context.getHoodieTestSuiteWriter().getCfg().enableHiveValidation) {
+      return;
+    }
     log.info("Executing hive query node {}", this.getName());
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
     TypedProperties properties = new TypedProperties();
