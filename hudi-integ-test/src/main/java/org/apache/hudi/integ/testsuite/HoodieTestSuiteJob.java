@@ -326,6 +326,9 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--enable-trino-validation"}, description = "Enables trino validation")
     public Boolean enableTrinoValidation = false;
 
+    @Parameter(names = {"--enable-hive-validation"}, description = "Enables hive validation")
+    public Boolean enableHiveValidation = false;
+
     @Parameter(names = {"--presto-jdbc-url"}, description = "Presto JDBC URL in the format jdbc:presto://<host>:<port>/<catalog>/<schema>  "
         + "e.g. URL to connect to Presto running on localhost port 8080 with the catalog `hive` and the schema `sales`: "
         + "jdbc:presto://localhost:8080/hive/sales")
