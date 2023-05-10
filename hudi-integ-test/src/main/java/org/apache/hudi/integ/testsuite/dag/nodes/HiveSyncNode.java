@@ -37,6 +37,11 @@ public class HiveSyncNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
+    if (!executionContext.getHoodieTestSuiteWriter().getCfg().enablePrestoValidation
+            && !executionContext.getHoodieTestSuiteWriter().getCfg().enableTrinoValidation
+            && !executionContext.getHoodieTestSuiteWriter().getCfg().enableHiveValidation) {
+      return;
+    }
     log.info("Executing hive sync node");
     SyncUtilHelpers.runHoodieMetaSync(HiveSyncTool.class.getName(), new TypedProperties(executionContext.getHoodieTestSuiteWriter().getProps()),
         executionContext.getHoodieTestSuiteWriter().getConfiguration(),
