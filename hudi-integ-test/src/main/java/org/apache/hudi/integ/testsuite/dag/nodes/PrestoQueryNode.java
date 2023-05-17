@@ -38,6 +38,7 @@ public class PrestoQueryNode extends BaseQueryNode {
     if (!context.getHoodieTestSuiteWriter().getCfg().enablePrestoValidation) {
       return;
     }
+    log.info("Starting hive sync for presto query node {}", this.getName());
     int validateOnceEveryItr = config.validateOnceEveryIteration();
     int itrCountToExecute = config.getIterationCountToExecute();
     if ((itrCountToExecute != -1 && itrCountToExecute == curItrCount)
